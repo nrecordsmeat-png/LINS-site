@@ -131,8 +131,17 @@ else document.getElementById('author').style.display='none';
 // 0 — уже сказано или общее место, 1 — развивает или перекликается, 2 — свой вывод в известном споре или новый перенос, 3 — своё или новая связка
 const NOVREL={"совпадает":0,"развивает":1,"перекликается":1};
 const NOVLAB=["уже сказано","развивает или перекликается с известным","свой вывод в известном споре","своё"];
-function novelty(t){const src=t.sources||[];
- if(t.commonplace)return {v:0,lab:'общее место',weak:false};
+// общее место засчитывается, только если его подтвердили: двое слепых читателей из разных семейств сами достроили мысль (known_by)
+// или поиск нашёл её как поговорку (commonplace.url). Пометка координатора без этого — «под вопросом», в балл не идёт.
+const FAM={};(P.readers||[]).forEach(r=>{FAM[r.id||r.name]=r.family||''});
+function cpStatus(t){const kb=t.known_by||[],rd=[...new Set(kb.map(k=>k.reader))],fm=new Set(rd.map(r=>FAM[r]).filter(Boolean));
+ const who=rd.map(r=>r+(FAM[r]?' ('+FAM[r]+')':'')).join(', ');
+ if(rd.length>=2&&fm.size>=2)return {ok:true,note:'сами достроили читатели: '+who};
+ if(t.commonplace&&t.commonplace.url)return {ok:true,note:'найдено как поговорка или житейское знание'};
+ if(t.commonplace||kb.length)return {ok:false,note:rd.length?(fm.size<2?'читатели из одного семейства: '+who:'достроил один читатель: '+who):'пометка координатора без подтверждения'};
+ return null}
+function novelty(t){const src=t.sources||[];const cp=cpStatus(t);
+ if(cp&&cp.ok)return {v:0,lab:'общее место',weak:false,cp:cp.note};
  if(!src.length&&status(t)==='not_searched')return null;
  const near=src.filter(s=>s.relation in NOVREL).map(s=>NOVREL[s.relation]);
  let v=near.length?Math.min(...near):(t.own||isOwn(t)||!src.length?3:2);
@@ -140,7 +149,7 @@ function novelty(t){const src=t.sources||[];
  if(t.transfer&&t.transfer.status==='not_found'&&v<2){v=2;lab='перенос мысли в новую область';q=t.transfer.queries||[]}
  if(t.link&&t.link.status==='not_found'){v=3;lab='новая связка известных мыслей';q=t.link.queries||[]}
  const weak=v>=2&&lab!=='свой вывод в известном споре'&&!q.length;
- return {v,lab,weak}}
+ return {v,lab,weak,cpq:cp?cp.note:''}}
 (function(){const box=document.getElementById('novelty');
  const N=R.map(novelty),sc=N.filter(Boolean);
  if(!sc.length){box.style.display='none';return}
@@ -150,9 +159,9 @@ function novelty(t){const src=t.sources||[];
  const weak=sc.filter(n=>n.weak).length;
  box.innerHTML=`<span>Новизна мыслей: насколько тезисы уже сказаны другими (по самому близкому найденному источнику, не по совпадению слов)</span>`+
   `<b style="font-size:20px">${score} / 100</b> · ${order.filter(k=>cnt[k]).map(k=>`${k}: ${cnt[k]}`).join(' · ')} · тезисов: ${sc.length}`+
-  `<ol style="margin:.4rem 0 0 1.2rem;font-size:13px">`+R.map((t,i)=>N[i]?`<li>${esc(t.thesis)} — <b>${esc(N[i].lab)}</b>${N[i].weak?' <span class="mut">(запросы поиска не записаны: новизна не подтверждена)</span>':''}</li>`:'').join('')+`</ol>`+
+  `<ol style="margin:.4rem 0 0 1.2rem;font-size:13px">`+R.map((t,i)=>N[i]?`<li>${esc(t.thesis)} — <b>${esc(N[i].lab)}</b>${N[i].cp?` <span class="mut">(${esc(N[i].cp)})</span>`:''}${N[i].cpq?` <span class="mut">(общее место под вопросом, в балл не идёт: ${esc(N[i].cpq)})</span>`:''}${N[i].weak?' <span class="mut">(запросы поиска не записаны: новизна не подтверждена)</span>':''}</li>`:'').join('')+`</ol>`+
   (weak?`<div class="mut">Отметок новизны без записанных запросов: ${weak}. Их нельзя отличить от слабого поиска.</div>`:'')+
-  `<div class="mut">Новизна — не правота. Балл: среднее по тезисам; 0 — уже сказано или общее место, 1 — развивает или перекликается, 2 — свой вывод в споре или новый перенос, 3 — своё или новая связка.</div>`})();
+  `<div class="mut">Новизна — не правота. Балл: среднее по тезисам; 0 — уже сказано или общее место, 1 — развивает или перекликается, 2 — свой вывод в споре или новый перенос, 3 — своё или новая связка. Общее место засчитывается, только если его сами достроили двое слепых читателей из разных семейств моделей.</div>`})();
 // ---------- сводка
 function renderTop(){const src=S.filter(x=>!LENS||x.lens===LENS);const ys=src.filter(x=>typeof x.year==='number').map(x=>x.year);
  const yl=y=>y<0?Math.abs(y)+" до н. э.":String(y);const tr=new Set(src.map(x=>x.tradition).filter(Boolean));
