@@ -71,9 +71,11 @@ document.title=P.title||'Корни мысли';document.getElementById('title')
 let LENS=null,SEL=null;
 // ---------- источники: все, включая без года; дубликаты считаются один раз
 const S=[],seen=new Set();
-R.forEach((t,ti)=>(t.sources||[]).forEach(s=>{const k=[s.who,s.work,s.relation,ti].join('|');if(seen.has(k)){DW.push(`дубликат источника «${s.who}» у тезиса ${ti+1} учтён один раз`);return}
+// дубликат — та же работа с тем же отношением, позицией и пояснением; разные позиции к одной работе хранятся обе
+// «проверено» вычисляется только по точной метке и ссылке; поле verified во входных данных не учитывается
+R.forEach((t,ti)=>(t.sources||[]).forEach(s=>{const k=[s.who,s.work,s.relation,ti,s.lens||'',s.point||''].join('|');if(seen.has(k)){DW.push(`дубликат источника «${s.who}» у тезиса ${ti+1} учтён один раз`);return}
  seen.add(k);if(!REL[s.relation]){DW.push(`неизвестное отношение «${s.relation}» у «${s.who}»`);return}
- S.push(Object.assign({ti,verified:/официально/.test(s.tag||'')&&!!s.url},s))}));
+ S.push(Object.assign({},s,{ti,verified:String(s.tag||'').trim()==='[официально]'&&!!s.url}))}));
 // ---------- разметка текста в браузере: n-е вхождение, совместные фразы, переносы строк
 const norm=x=>x.toLowerCase().replace(/ё/g,'е');const NT=norm(TEXT);
 const spans={};
