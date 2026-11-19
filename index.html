@@ -61,6 +61,7 @@ section{display:none}section.on{display:block}
  <p>Код инструмента и процедура закрыты. Здесь только готовые разборы и механика текста в браузере.</p>
 </section>
 
+<script src="viewer/mechanics.js"></script>
 <script>
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{
@@ -74,26 +75,10 @@ fetch('reports/index.json').then(r=>r.json()).then(list=>{
   (x.check?`<a href="reports/${encodeURIComponent(x.check)}">Отчёт о понимании</a>`:'')+'</div></div>').join(''):'<p class="mut">Пока нет разборов.</p>';
 }).catch(e=>{document.getElementById('list').innerHTML='<p class="mut">Не удалось загрузить список разборов: '+esc(e)+'</p>'});
 
-// ---------- механика: тот же расчёт, что scripts/mechanics.py
-const VOW=new Set('аеёиоуыэюяaeiouy');
-const words=s=>s.match(/[а-яёa-z]+(?:-[а-яёa-z]+)*/gi)||[];
-const syl=w=>[...w.toLowerCase()].filter(c=>VOW.has(c)).length;
-const CONN=["потому что","поэтому","значит","то есть","так что","поскольку","следовательно","однако","но","зато","хотя","если","тогда","например","скажем","во-первых","во-вторых","итак","в итоге"];
-const ADDR=/(^|[^а-яёa-z])(ты|тебе|тебя|тобой|твой|твоя|твоё|твое|твои|вы|вам|вас|ваш|ваша|ваши|you|your|yours)(?=[^а-яёa-z]|$)/gi;
-const EX=/(^|[^а-яё])(например|скажем|вот|допустим|к примеру)(?=[^а-яё]|$)/gi;
-function sentences(t){const flat=t.replace(/([^\n])\n(?!\n)/g,'$1 ');return flat.split(/(?<=[.!?…])[»"”)]*\s+|\n{2,}/).map(x=>x.trim()).filter(x=>words(x).length)}
-function paragraphs(t){let b=t.split(/\n\s*\n/).filter(p=>words(p).length);if(b.length<=1)b=t.split('\n').filter(p=>words(p).length);return b}
-const median=a=>{const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length?(s.length%2?s[m]:(s[m-1]+s[m])/2):0};
-const cnt=(re,t)=>(t.match(re)||[]).length;
+// ---------- механика: расчёт в viewer/mechanics.js — тот же файл, что text-check/viewer/mechanics.js в LINS
 document.getElementById('run').onclick=()=>{const t=document.getElementById('txt').value;const out=document.getElementById('out');
- const W=words(t);if(!W.length){out.innerHTML='<p class="mut">Текст пуст: считать нечего.</p>';return}
- const n=W.length,S=sentences(t),L=S.map(s=>words(s).length),P=paragraphs(t).map(p=>words(p).length),low=t.toLowerCase();
- const per=c=>Math.round(c*10000/n)/10;
- const longS=S.filter((s,i)=>L[i]>=25).sort((a,b)=>b.length-a.length);
- const longW=W.filter(w=>syl(w)>=5).length;
- let conn=0;CONN.forEach(c=>{conn+=cnt(new RegExp('(^|[^а-яё])'+c.replace('-','\\-')+'(?=[^а-яё]|$)','g'),low)});
- const r={med:median(L),mean:Math.round(L.reduce((a,b)=>a+b,0)/L.length*10)/10,long:Math.round(100*longS.length/S.length),lw:Math.round(1000*longW/n)/10,
-  pmed:median(P),pmax:Math.max(...P),conn:per(conn),q:per(cnt(/\?/g,t)),addr:per(cnt(ADDR,t)),ex:per(cnt(EX,t)),excl:per(cnt(/!/g,t))};
+ const r=textcheckMech(t);if(!r){out.innerHTML='<p class="mut">Текст пуст: считать нечего.</p>';return}
+ const n=r.n,longS=r.longS,S={length:r.sent},P={length:r.par};
  const hints=[];if(r.med>15)hints.push('фразы длинные для живого текста');if(r.long>10)hints.push('много фраз от 25 слов');
  if(r.lw>8)hints.push('много длинных слов: возможен канцелярит');if(r.pmax>150)hints.push('есть абзац длиннее 150 слов');
  out.innerHTML=`<div class="kv">`+[[n,'слов'],[S.length,'предложений'],[P.length,'абзацев'],[r.med,'длина фразы, медиана'],[r.long+'%','фраз от 25 слов'],[r.lw+'%','длинных слов (5+ слогов)'],
