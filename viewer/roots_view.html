@@ -43,6 +43,7 @@ a{color:var(--dev)}
 <div class="lensbar" id="lensbar"></div>
 <div class="meaning" id="author"></div>
 <div class="meaning" id="meaning"></div>
+<div class="meaning" id="novelty"></div>
 <div class="top" id="top"></div>
 <div class="wrap">
  <div class="text" id="text"></div>
@@ -126,6 +127,32 @@ function renderMeaning(){const box=document.getElementById('meaning');const L=LE
 if(P.axis_note){const d=document.createElement('p');d.className='mut';d.textContent='Ось спора: '+P.axis_note;document.getElementById('lensbar').after(d)}
 if(P.author_reading)document.getElementById('author').innerHTML='<span>Прочтение автора — последнее слово о замысле, но не о правоте и не о том, что утверждает источник</span>'+esc(P.author_reading);
 else document.getElementById('author').style.display='none';
+// ---------- новизна мыслей: по самому близкому источнику; «расходится» новизну не снижает
+// 0 — уже сказано или общее место, 1 — развивает или перекликается, 2 — свой вывод в известном споре или новый перенос, 3 — своё или новая связка
+const NOVREL={"совпадает":0,"развивает":1,"перекликается":1};
+const NOVLAB=["уже сказано","развивает или перекликается с известным","свой вывод в известном споре","своё"];
+function novelty(t){const src=t.sources||[];
+ if(t.commonplace)return {v:0,lab:'общее место',weak:false};
+ if(!src.length&&status(t)==='not_searched')return null;
+ const near=src.filter(s=>s.relation in NOVREL).map(s=>NOVREL[s.relation]);
+ let v=near.length?Math.min(...near):(t.own||isOwn(t)||!src.length?3:2);
+ let lab=NOVLAB[v],q=(t.search||{}).queries||[];
+ if(t.transfer&&t.transfer.status==='not_found'&&v<2){v=2;lab='перенос мысли в новую область';q=t.transfer.queries||[]}
+ if(t.link&&t.link.status==='not_found'){v=3;lab='новая связка известных мыслей';q=t.link.queries||[]}
+ const weak=v>=2&&lab!=='свой вывод в известном споре'&&!q.length;
+ return {v,lab,weak}}
+(function(){const box=document.getElementById('novelty');
+ const N=R.map(novelty),sc=N.filter(Boolean);
+ if(!sc.length){box.style.display='none';return}
+ const score=Math.round(sc.reduce((a,n)=>a+n.v,0)/sc.length/3*100);
+ const cnt={};sc.forEach(n=>cnt[n.lab]=(cnt[n.lab]||0)+1);
+ const order=['своё','новая связка известных мыслей','перенос мысли в новую область','свой вывод в известном споре','развивает или перекликается с известным','уже сказано','общее место'];
+ const weak=sc.filter(n=>n.weak).length;
+ box.innerHTML=`<span>Новизна мыслей: насколько тезисы уже сказаны другими (по самому близкому найденному источнику, не по совпадению слов)</span>`+
+  `<b style="font-size:20px">${score} / 100</b> · ${order.filter(k=>cnt[k]).map(k=>`${k}: ${cnt[k]}`).join(' · ')} · тезисов: ${sc.length}`+
+  `<ol style="margin:.4rem 0 0 1.2rem;font-size:13px">`+R.map((t,i)=>N[i]?`<li>${esc(t.thesis)} — <b>${esc(N[i].lab)}</b>${N[i].weak?' <span class="mut">(запросы поиска не записаны: новизна не подтверждена)</span>':''}</li>`:'').join('')+`</ol>`+
+  (weak?`<div class="mut">Отметок новизны без записанных запросов: ${weak}. Их нельзя отличить от слабого поиска.</div>`:'')+
+  `<div class="mut">Новизна — не правота. Балл: среднее по тезисам; 0 — уже сказано или общее место, 1 — развивает или перекликается, 2 — свой вывод в споре или новый перенос, 3 — своё или новая связка.</div>`})();
 // ---------- сводка
 function renderTop(){const src=S.filter(x=>!LENS||x.lens===LENS);const ys=src.filter(x=>typeof x.year==='number').map(x=>x.year);
  const yl=y=>y<0?Math.abs(y)+" до н. э.":String(y);const tr=new Set(src.map(x=>x.tradition).filter(Boolean));
